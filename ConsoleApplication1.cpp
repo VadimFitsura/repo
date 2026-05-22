@@ -4,15 +4,21 @@
 #include <cassert>
 #include <cmath>
 
-// ==============================
-// Задание 1 и 2: Expression иерархия, Transformer
-// ==============================
-
 struct Transformer;
 struct Number;
 struct BinaryOperation;
 struct FunctionCall;
 struct Variable;
+struct AquariumObject;
+struct Barbus;
+struct Carp;
+struct Catfish;
+struct BigSnail;
+struct SmallSnail;
+struct Waterweed;
+struct Fish;
+struct sinal;
+struct Water;
 
 struct Expression {
     virtual ~Expression() {}
@@ -28,7 +34,6 @@ struct Transformer {
     virtual Expression* transformVariable(Variable const*) = 0;
 };
 
-// Number
 struct Number : Expression {
     Number(double value) : value_(value) {}
     double value() const { return value_; }
@@ -40,7 +45,6 @@ private:
     double value_;
 };
 
-// BinaryOperation
 struct BinaryOperation : Expression {
     enum { PLUS = '+', MINUS = '-', DIV = '/', MUL = '*' };
     BinaryOperation(Expression const* left, int op, Expression const* right)
@@ -74,7 +78,6 @@ private:
     int op_;
 };
 
-// FunctionCall
 struct FunctionCall : Expression {
     FunctionCall(std::string const& name, Expression const* arg)
         : name_(name), arg_(arg) {
@@ -97,11 +100,10 @@ private:
     Expression const* arg_;
 };
 
-// Variable
 struct Variable : Expression {
     Variable(std::string const& name) : name_(name) {}
     std::string const& name() const { return name_; }
-    double evaluate() const override { return 0.0; } // значение не задано
+    double evaluate() const override { return 0.0; }
     Expression* transform(Transformer* tr) const override {
         return tr->transformVariable(this);
     }
@@ -109,7 +111,6 @@ private:
     std::string const name_;
 };
 
-// ========== Задание 1: CopySyntaxTree ==========
 struct CopySyntaxTree : Transformer {
     Expression* transformNumber(Number const* number) override {
         return new Number(number->value());
@@ -128,7 +129,6 @@ struct CopySyntaxTree : Transformer {
     }
 };
 
-// ========== Задание 2: FoldConstants ==========
 struct FoldConstants : Transformer {
     Expression* transformNumber(Number const* number) override {
         return new Number(number->value());
@@ -174,20 +174,7 @@ struct FoldConstants : Transformer {
     }
 };
 
-// ==============================
-// Задание 3 (Вариант 16): Аквариум с Visitor
-// ==============================
 
-// Предварительные объявления
-struct AquariumObject;
-struct Barbus;
-struct Carp;
-struct Catfish;
-struct BigSnail;
-struct SmallSnail;
-struct Waterweed;
-
-// Visitor для аквариума
 struct AquariumVisitor {
     virtual ~AquariumVisitor() {}
     virtual void visit(Barbus* obj) = 0;
@@ -198,44 +185,56 @@ struct AquariumVisitor {
     virtual void visit(Waterweed* obj) = 0;
 };
 
-// Базовый класс обитателя
 struct AquariumObject {
     virtual ~AquariumObject() {}
     virtual void accept(AquariumVisitor& visitor) = 0;
+
     virtual std::string name() const = 0;
 };
-
-// Рыбы
-struct Barbus : AquariumObject {
+struct Fish : AquariumObject {
+    virtual ~Fish() {}
+     void accept(AquariumVisitor& visitor) = 0;
+     std::string name() const = 0;
+};
+struct Barbus : Fish {
     void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
     std::string name() const override { return "Barbus"; }
 };
-struct Carp : AquariumObject {
+struct Carp : Fish {
     void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
     std::string name() const override { return "Carp"; }
 };
-struct Catfish : AquariumObject {
+struct Catfish : Fish {
     void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
     std::string name() const override { return "Catfish"; }
 };
 
-// Моллюски
-struct BigSnail : AquariumObject {
+struct sinal : AquariumObject {
+    virtual ~sinal() {}
+    void accept(AquariumVisitor& visitor) = 0;
+     std::string name() const = 0;
+};
+struct BigSnail : sinal {
     void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
     std::string name() const override { return "Big Snail"; }
 };
-struct SmallSnail : AquariumObject {
+struct SmallSnail : sinal {
+    
     void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
     std::string name() const override { return "Small Snail"; }
 };
 
-// Водоросли
 struct Waterweed : AquariumObject {
+    virtual ~Waterweed() {}
+    void accept(AquariumVisitor& visitor) = 0;
+     std::string name() const = 0;
+};
+
+struct Water : Waterweed {
     void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
     std::string name() const override { return "Waterweed"; }
 };
 
-// Аквариум – контейнер
 class Aquarium {
     std::vector<AquariumObject*> inhabitants;
 public:
@@ -250,7 +249,6 @@ public:
     }
 };
 
-// Конкретный Visitor: подсчёт особей
 struct CountVisitor : AquariumVisitor {
     int barbus = 0, carp = 0, catfish = 0, bigSnail = 0, smallSnail = 0, waterweed = 0;
     void visit(Barbus*) override { ++barbus; }
@@ -271,7 +269,6 @@ struct CountVisitor : AquariumVisitor {
     }
 };
 
-// Другой Visitor: вывод имён
 struct NamePrinter : AquariumVisitor {
     void visit(Barbus* obj) override { std::cout << obj->name() << "\n"; }
     void visit(Carp* obj) override { std::cout << obj->name() << "\n"; }
@@ -281,11 +278,9 @@ struct NamePrinter : AquariumVisitor {
     void visit(Waterweed* obj) override { std::cout << obj->name() << "\n"; }
 };
 
-// ==============================
-// Единый main для всех заданий
-// ==============================
 int main() {
-    std::cout << "========== Задание 1: CopySyntaxTree ==========\n";
+    setlocale(LC_ALL, "Russian");
+    std::cout << "Задание 1:\n";
     {
         Number* n32 = new Number(32.0);
         Number* n16 = new Number(16.0);
@@ -305,7 +300,7 @@ int main() {
         delete callAbs;
     }
 
-    std::cout << "\n========== Задание 2: FoldConstants ==========\n";
+    std::cout << "\nЗадание 2:\n";
     {
         Number* n32 = new Number(32.0);
         Number* n16 = new Number(16.0);
@@ -325,7 +320,7 @@ int main() {
         delete callAbs;
     }
 
-    std::cout << "\n========== Задание 3 (Вариант 16): Аквариум ==========\n";
+    std::cout << "\n Задание 3 (Вариант 16):\n";
     {
         Aquarium aquarium;
         aquarium.add(new Barbus());
@@ -335,7 +330,7 @@ int main() {
         aquarium.add(new BigSnail());
         aquarium.add(new SmallSnail());
         aquarium.add(new SmallSnail());
-        aquarium.add(new Waterweed());
+        aquarium.add(new Water());
 
         CountVisitor counter;
         aquarium.accept(counter);
