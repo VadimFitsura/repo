@@ -1,7 +1,12 @@
 ﻿#include <iostream>
 #include <string>
+#include <vector>
 #include <cassert>
 #include <cmath>
+
+// ==============================
+// Задание 1 и 2: Expression иерархия, Transformer
+// ==============================
 
 struct Transformer;
 struct Number;
@@ -23,6 +28,7 @@ struct Transformer {
     virtual Expression* transformVariable(Variable const*) = 0;
 };
 
+// Number
 struct Number : Expression {
     Number(double value) : value_(value) {}
     double value() const { return value_; }
@@ -34,6 +40,7 @@ private:
     double value_;
 };
 
+// BinaryOperation
 struct BinaryOperation : Expression {
     enum { PLUS = '+', MINUS = '-', DIV = '/', MUL = '*' };
     BinaryOperation(Expression const* left, int op, Expression const* right)
@@ -67,19 +74,18 @@ private:
     int op_;
 };
 
+// FunctionCall
 struct FunctionCall : Expression {
     FunctionCall(std::string const& name, Expression const* arg)
         : name_(name), arg_(arg) {
         assert(arg_);
         assert(name_ == "sqrt" || name_ == "abs");
     }
-    ~FunctionCall() {
-        delete arg_;
-    }
+    ~FunctionCall() { delete arg_; }
     double evaluate() const override {
         double a = arg_->evaluate();
-        if (name_ == "sqrt") return sqrt(a);
-        else return fabs(a);
+        if (name_ == "sqrt") return std::sqrt(a);
+        else return std::fabs(a);
     }
     Expression* transform(Transformer* tr) const override {
         return tr->transformFunctionCall(this);
@@ -91,10 +97,11 @@ private:
     Expression const* arg_;
 };
 
+// Variable
 struct Variable : Expression {
     Variable(std::string const& name) : name_(name) {}
     std::string const& name() const { return name_; }
-    double evaluate() const override { return 0.0; }
+    double evaluate() const override { return 0.0; } // значение не задано
     Expression* transform(Transformer* tr) const override {
         return tr->transformVariable(this);
     }
@@ -102,6 +109,7 @@ private:
     std::string const name_;
 };
 
+// ========== Задание 1: CopySyntaxTree ==========
 struct CopySyntaxTree : Transformer {
     Expression* transformNumber(Number const* number) override {
         return new Number(number->value());
@@ -120,23 +128,17 @@ struct CopySyntaxTree : Transformer {
     }
 };
 
+// ========== Задание 2: FoldConstants ==========
 struct FoldConstants : Transformer {
     Expression* transformNumber(Number const* number) override {
-        // Число остаётся без изменений
         return new Number(number->value());
     }
-
     Expression* transformBinaryOperation(BinaryOperation const* binop) override {
-        // Сначала рекурсивно сворачиваем операнды
         Expression* left = binop->left()->transform(this);
         Expression* right = binop->right()->transform(this);
-
-        // Пытаемся привести операнды к Number*
         Number* leftNum = dynamic_cast<Number*>(left);
         Number* rightNum = dynamic_cast<Number*>(right);
-
         if (leftNum && rightNum) {
-            // Оба операнда – числа, вычисляем результат
             double res;
             switch (binop->operation()) {
             case BinaryOperation::PLUS: res = leftNum->value() + rightNum->value(); break;
@@ -145,26 +147,21 @@ struct FoldConstants : Transformer {
             case BinaryOperation::DIV: res = leftNum->value() / rightNum->value(); break;
             default: res = 0.0;
             }
-            // Удаляем временные операнды
             delete left;
             delete right;
             return new Number(res);
         }
         else {
-            // Не оба числа – возвращаем операцию с уже свёрнутыми поддеревьями
             return new BinaryOperation(left, binop->operation(), right);
         }
     }
-
     Expression* transformFunctionCall(FunctionCall const* fcall) override {
         Expression* arg = fcall->arg()->transform(this);
         Number* argNum = dynamic_cast<Number*>(arg);
         if (argNum) {
             double val;
-            if (fcall->name() == "sqrt")
-                val = sqrt(argNum->value());
-            else // abs
-                val = fabs(argNum->value());
+            if (fcall->name() == "sqrt") val = std::sqrt(argNum->value());
+            else val = std::fabs(argNum->value());
             delete arg;
             return new Number(val);
         }
@@ -172,48 +169,182 @@ struct FoldConstants : Transformer {
             return new FunctionCall(fcall->name(), arg);
         }
     }
-
     Expression* transformVariable(Variable const* var) override {
         return new Variable(var->name());
     }
 };
 
-// Демонстрация работы FoldConstants
-void demoFoldConstants() {
-    Number* n32 = new Number(32.0);
-    Number* n16 = new Number(16.0);
-    BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
-    FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
-    Variable* var = new Variable("var");
-    BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL, callSqrt);
-    FunctionCall* callAbs = new FunctionCall("abs", mult);
+// ==============================
+// Задание 3 (Вариант 16): Аквариум с Visitor
+// ==============================
 
-    FoldConstants fc;
-    Expression* folded = callAbs->transform(&fc);
+// Предварительные объявления
+struct AquariumObject;
+struct Barbus;
+struct Carp;
+struct Catfish;
+struct BigSnail;
+struct SmallSnail;
+struct Waterweed;
 
-    std::cout << "Original result: " << callAbs->evaluate() << std::endl;
-    std::cout << "Folded result: " << folded->evaluate() << std::endl;
+// Visitor для аквариума
+struct AquariumVisitor {
+    virtual ~AquariumVisitor() {}
+    virtual void visit(Barbus* obj) = 0;
+    virtual void visit(Carp* obj) = 0;
+    virtual void visit(Catfish* obj) = 0;
+    virtual void visit(BigSnail* obj) = 0;
+    virtual void visit(SmallSnail* obj) = 0;
+    virtual void visit(Waterweed* obj) = 0;
+};
 
-    // Очистка
-    delete folded;
-    delete callAbs;
-}
+// Базовый класс обитателя
+struct AquariumObject {
+    virtual ~AquariumObject() {}
+    virtual void accept(AquariumVisitor& visitor) = 0;
+    virtual std::string name() const = 0;
+};
 
-int main(){
-    Number* n32 = new Number(32.0);
-    Number* n16 = new Number(16.0);
-    BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
-    FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
-    Variable* var = new Variable("var");
-    BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL, callSqrt);
-    FunctionCall* callAbs = new FunctionCall("abs", mult);
+// Рыбы
+struct Barbus : AquariumObject {
+    void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
+    std::string name() const override { return "Barbus"; }
+};
+struct Carp : AquariumObject {
+    void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
+    std::string name() const override { return "Carp"; }
+};
+struct Catfish : AquariumObject {
+    void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
+    std::string name() const override { return "Catfish"; }
+};
 
-    CopySyntaxTree cst;
-    Expression* newExpr = callAbs->transform(&cst);
+// Моллюски
+struct BigSnail : AquariumObject {
+    void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
+    std::string name() const override { return "Big Snail"; }
+};
+struct SmallSnail : AquariumObject {
+    void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
+    std::string name() const override { return "Small Snail"; }
+};
 
-    std::cout << "Original expression result: " << callAbs->evaluate() << std::endl;
-    std::cout << "Copied expression result: " << newExpr->evaluate() << std::endl;
+// Водоросли
+struct Waterweed : AquariumObject {
+    void accept(AquariumVisitor& visitor) override { visitor.visit(this); }
+    std::string name() const override { return "Waterweed"; }
+};
 
-    delete newExpr;
-    delete callAbs;
+// Аквариум – контейнер
+class Aquarium {
+    std::vector<AquariumObject*> inhabitants;
+public:
+    ~Aquarium() {
+        for (auto obj : inhabitants) delete obj;
+    }
+    void add(AquariumObject* obj) {
+        inhabitants.push_back(obj);
+    }
+    void accept(AquariumVisitor& visitor) {
+        for (auto obj : inhabitants) obj->accept(visitor);
+    }
+};
+
+// Конкретный Visitor: подсчёт особей
+struct CountVisitor : AquariumVisitor {
+    int barbus = 0, carp = 0, catfish = 0, bigSnail = 0, smallSnail = 0, waterweed = 0;
+    void visit(Barbus*) override { ++barbus; }
+    void visit(Carp*) override { ++carp; }
+    void visit(Catfish*) override { ++catfish; }
+    void visit(BigSnail*) override { ++bigSnail; }
+    void visit(SmallSnail*) override { ++smallSnail; }
+    void visit(Waterweed*) override { ++waterweed; }
+    void print() const {
+        std::cout << "Aquarium composition:\n"
+            << "Barbus: " << barbus << "\n"
+            << "Carp: " << carp << "\n"
+            << "Catfish: " << catfish << "\n"
+            << "Big Snail: " << bigSnail << "\n"
+            << "Small Snail: " << smallSnail << "\n"
+            << "Waterweed: " << waterweed << "\n"
+            << "Total: " << (barbus + carp + catfish + bigSnail + smallSnail + waterweed) << "\n";
+    }
+};
+
+// Другой Visitor: вывод имён
+struct NamePrinter : AquariumVisitor {
+    void visit(Barbus* obj) override { std::cout << obj->name() << "\n"; }
+    void visit(Carp* obj) override { std::cout << obj->name() << "\n"; }
+    void visit(Catfish* obj) override { std::cout << obj->name() << "\n"; }
+    void visit(BigSnail* obj) override { std::cout << obj->name() << "\n"; }
+    void visit(SmallSnail* obj) override { std::cout << obj->name() << "\n"; }
+    void visit(Waterweed* obj) override { std::cout << obj->name() << "\n"; }
+};
+
+// ==============================
+// Единый main для всех заданий
+// ==============================
+int main() {
+    std::cout << "========== Задание 1: CopySyntaxTree ==========\n";
+    {
+        Number* n32 = new Number(32.0);
+        Number* n16 = new Number(16.0);
+        BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
+        FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
+        Variable* var = new Variable("var");
+        BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL, callSqrt);
+        FunctionCall* callAbs = new FunctionCall("abs", mult);
+
+        CopySyntaxTree cst;
+        Expression* newExpr = callAbs->transform(&cst);
+
+        std::cout << "Original result: " << callAbs->evaluate() << std::endl;
+        std::cout << "Copied result: " << newExpr->evaluate() << std::endl;
+
+        delete newExpr;
+        delete callAbs;
+    }
+
+    std::cout << "\n========== Задание 2: FoldConstants ==========\n";
+    {
+        Number* n32 = new Number(32.0);
+        Number* n16 = new Number(16.0);
+        BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
+        FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
+        Variable* var = new Variable("var");
+        BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL, callSqrt);
+        FunctionCall* callAbs = new FunctionCall("abs", mult);
+
+        FoldConstants fc;
+        Expression* folded = callAbs->transform(&fc);
+
+        std::cout << "Original: " << callAbs->evaluate() << std::endl;
+        std::cout << "Folded:   " << folded->evaluate() << std::endl;
+
+        delete folded;
+        delete callAbs;
+    }
+
+    std::cout << "\n========== Задание 3 (Вариант 16): Аквариум ==========\n";
+    {
+        Aquarium aquarium;
+        aquarium.add(new Barbus());
+        aquarium.add(new Barbus());
+        aquarium.add(new Carp());
+        aquarium.add(new Catfish());
+        aquarium.add(new BigSnail());
+        aquarium.add(new SmallSnail());
+        aquarium.add(new SmallSnail());
+        aquarium.add(new Waterweed());
+
+        CountVisitor counter;
+        aquarium.accept(counter);
+        counter.print();
+
+        std::cout << "\nList of inhabitants:\n";
+        NamePrinter printer;
+        aquarium.accept(printer);
+    }
+
+    return 0;
 }
