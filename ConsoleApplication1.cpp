@@ -120,6 +120,85 @@ struct CopySyntaxTree : Transformer {
     }
 };
 
+struct FoldConstants : Transformer {
+    Expression* transformNumber(Number const* number) override {
+        // Число остаётся без изменений
+        return new Number(number->value());
+    }
+
+    Expression* transformBinaryOperation(BinaryOperation const* binop) override {
+        // Сначала рекурсивно сворачиваем операнды
+        Expression* left = binop->left()->transform(this);
+        Expression* right = binop->right()->transform(this);
+
+        // Пытаемся привести операнды к Number*
+        Number* leftNum = dynamic_cast<Number*>(left);
+        Number* rightNum = dynamic_cast<Number*>(right);
+
+        if (leftNum && rightNum) {
+            // Оба операнда – числа, вычисляем результат
+            double res;
+            switch (binop->operation()) {
+            case BinaryOperation::PLUS: res = leftNum->value() + rightNum->value(); break;
+            case BinaryOperation::MINUS: res = leftNum->value() - rightNum->value(); break;
+            case BinaryOperation::MUL: res = leftNum->value() * rightNum->value(); break;
+            case BinaryOperation::DIV: res = leftNum->value() / rightNum->value(); break;
+            default: res = 0.0;
+            }
+            // Удаляем временные операнды
+            delete left;
+            delete right;
+            return new Number(res);
+        }
+        else {
+            // Не оба числа – возвращаем операцию с уже свёрнутыми поддеревьями
+            return new BinaryOperation(left, binop->operation(), right);
+        }
+    }
+
+    Expression* transformFunctionCall(FunctionCall const* fcall) override {
+        Expression* arg = fcall->arg()->transform(this);
+        Number* argNum = dynamic_cast<Number*>(arg);
+        if (argNum) {
+            double val;
+            if (fcall->name() == "sqrt")
+                val = sqrt(argNum->value());
+            else // abs
+                val = fabs(argNum->value());
+            delete arg;
+            return new Number(val);
+        }
+        else {
+            return new FunctionCall(fcall->name(), arg);
+        }
+    }
+
+    Expression* transformVariable(Variable const* var) override {
+        return new Variable(var->name());
+    }
+};
+
+// Демонстрация работы FoldConstants
+void demoFoldConstants() {
+    Number* n32 = new Number(32.0);
+    Number* n16 = new Number(16.0);
+    BinaryOperation* minus = new BinaryOperation(n32, BinaryOperation::MINUS, n16);
+    FunctionCall* callSqrt = new FunctionCall("sqrt", minus);
+    Variable* var = new Variable("var");
+    BinaryOperation* mult = new BinaryOperation(var, BinaryOperation::MUL, callSqrt);
+    FunctionCall* callAbs = new FunctionCall("abs", mult);
+
+    FoldConstants fc;
+    Expression* folded = callAbs->transform(&fc);
+
+    std::cout << "Original result: " << callAbs->evaluate() << std::endl;
+    std::cout << "Folded result: " << folded->evaluate() << std::endl;
+
+    // Очистка
+    delete folded;
+    delete callAbs;
+}
+
 int main(){
     Number* n32 = new Number(32.0);
     Number* n16 = new Number(16.0);
